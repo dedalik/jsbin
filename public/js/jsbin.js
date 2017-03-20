@@ -130,9 +130,9 @@ function exposeSettings() {
     return results;
   }
 
-  if (isDOM(window.jsbin) || !window.jsbin || !window.jsbin.version) { // because...STUPIDITY!!!
+  if (isDOM(window.jsbin) || !window.jsbin || !window.jsbin.state) { // because...STUPIDITY!!!
     window.jsbin = {
-      user: window.jsbin.user,
+      user: $.extend(true, {}, window.jsbin.user, jsbin.user),
       'static': jsbin['static'],
       version: jsbin.version,
       analytics: jsbin.analytics,
@@ -170,6 +170,13 @@ if (storedSettings === 'undefined' || jsbin.embed) {
   // yes, equals the *string* 'undefined', then something went wrong
   storedSettings = null;
 }
+
+// try to copy across statics
+['root', 'shareRoot', 'runner', 'static', 'version'].map(function (key) {
+  if (!jsbin[key]) {
+    jsbin[key] = window.jsbin[key];
+  }
+});
 
 if (jsbin.user && jsbin.user.name) {
   jsbin.settings = $.extend(true, {}, jsbin.user.settings, jsbin.settings);
@@ -379,3 +386,69 @@ if (jsbin.embed) {
     return false;
   });
 }
+
+window.addEventListener('message', function (event) {
+  var data;
+  try {
+    data = JSON.parse(event.data);
+  } catch (e) {
+    return;
+  }
+
+  if (data.type === 'cached') {
+    if (data.updated > jsbin.state.metadata.last_updated || !jsbin.state.metadata.last_updated) {
+      console.log('restored from cache: %sms newer', (new Date(data.updated).getTime() - new Date(jsbin.state.metadata.last_updated).getTime()) / 100);
+      // update the bin
+      jsbin.panels.panels.html.setCode(data.template.html);
+      jsbin.panels.panels.javascript.setCode(data.template.javascript);
+      jsbin.panels.panels.css.setCode(data.template.css);
+      $('a.save:first').click();
+    }
+  }
+});
+
+(function() {
+  if (!jsbin.settings.debug) {
+    return;
+  }
+
+  var active = document.createElement('pre');
+  document.body.appendChild(active);
+  active.tabindex = -1;
+  with (active.style) { // warning: `with` I know what I'm doing!
+    position = 'fixed';
+    padding = '2px';
+    bottom = right = '20px';
+    margin = 0;
+    fontSize = 12;
+    color = '#fff';
+    background = '#aaa';
+    whiteSpace = 'pre-wrap';
+    maxWidth = '95%';
+    zIndex = 10000000;
+    pointerEvents = 'none';
+  }
+
+  var lastActive = null;
+  var showActive = function () {
+    var el = document.activeElement;
+    var html = '';
+    var attrs = el.attributes;
+    var i = 0;
+
+    if (el !== lastActive && el !== active) {
+      for (; i < attrs.length; i++) {
+        html += ' ' + attrs[i].name + '="' + attrs[i].value + '"';
+      }
+
+      active.textContent = '<' + el.nodeName.toLowerCase() + html + '>';
+      lastActive = el;
+    }
+
+    requestAnimationFrame(showActive);
+  };
+
+  showActive();
+
+
+})();
